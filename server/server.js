@@ -12,25 +12,30 @@ import cors from '@koa/cors'
 import mongoose from 'mongoose';
 
 const _ = require('lodash'); // to get specific body fields
-mongoose.connect('mongodb://localhost:27017/hms_db', {
+mongoose.connect('mongodb://localhost:27017/hms_db', { // Connect Mobgodb locally
   useNewUrlParser: true,
   useUnifiedTopology: true
 }, function (err) {
   if (err) console.log('Error connecting mongodb', err.message)
 });
 
+// Models
 const customerModel = require('./models/customerModel');
 const orderModel = require('./models/orderModel');
+
+// Controllers
 const customerController = require('./controllers/customerController');
 const orderController = require('./controllers/orderController');
 
-
+// Environment Setup
 dotenv.config();
 const port = parseInt(process.env.PORT, 10) || 8081;
 const dev = process.env.NODE_ENV !== "production";
 const app = next({
   dev
 });
+
+// Shopify request handler
 const handle = app.getRequestHandler();
 const { SHOPIFY_API_SECRET, SHOPIFY_API_KEY, SCOPES } = process.env;
 app.prepare().then(() => {
@@ -38,6 +43,8 @@ app.prepare().then(() => {
   const router = new Router();
   server.use(session(server));
   server.keys = [SHOPIFY_API_SECRET];
+
+  // Middleware to check authentication before any request
   server.use(
     createShopifyAuth({
       apiKey: SHOPIFY_API_KEY,
@@ -51,6 +58,8 @@ app.prepare().then(() => {
         ctx.cookies.set("shopOrigin", shop, {
           httpOnly: false
         });
+
+        //Get data from shopify store after authentication and save it to DB
         customerController.fetchAndSaveCustomers(ctx.session.shop, ctx.session.accessToken)
         orderController.fetchAndSaveOrders(ctx.session.shop, ctx.session.accessToken)
         ctx.redirect("/");
@@ -62,45 +71,17 @@ app.prepare().then(() => {
       version: ApiVersion.October19
     })
   );
+
+  // To allow cross origin request
   server.use(cors())
 
-  // Get All customers data from  MongoDB
-  router.get('/api/customers', async (ctx, next) => {
-    try {
-      await customerModel.find({}, (err, customers) => {
-        if (err) {
-          ctx.body = { status: 'failed', message: err.message }
-        }
-        else { // Make Array of Arrays for Polaris DataTables 
-          let tempArr = []
-          const customersCount = customers.length;
-          const ratingRatio = (customersCount / 100) * 20;
-          let rating = 5;
-          customers.map((item, index) => {
-            tempArr.push([
-              item.first_name || '-',
-              item.last_name || '-',
-              item.email || '-',
-              item.phone || '-',
-              item.last_order_id || '-',
-              item.orders_count || '-',
-              item.total_spent || '-',
-              rating
-            ])
-            //Index starts from 0
-            if ((index + 1) % ratingRatio === 0) rating = rating - 1;
-          })
-          ctx.body = { // Response
-            status: 'success',
-            data: tempArr
-          };
-        }
-      }).sort({orders_count: -1})
-    } catch (err) {
-      ctx.body = { status: 'failed', message: err.message }
-    }
-  })
 
+  /************* Routes ***************/
+
+  // Get All customers data from  MongoDB
+  router.get('/api/customers', customerController.getCustomers);
+
+  //Middleware 
   router.get("*", verifyRequest(), async ctx => {
     await handle(ctx.req, ctx.res);
     ctx.respond = false;
@@ -108,9 +89,12 @@ app.prepare().then(() => {
 
   })
 
-
+  //Routes setup
   server.use(router.allowedMethods());
   server.use(router.routes());
+
+  /************* Routes End***************/
+
   server.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);
   });

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 const _ = require('lodash');
 let orderModel = mongoose.model('Order');
 
+// Fetch Orders from store and save it into local database
 exports.fetchAndSaveOrders = async function (shop, accessToken) {
     console.log('Fetching order data and saving ...')
 
@@ -14,7 +15,7 @@ exports.fetchAndSaveOrders = async function (shop, accessToken) {
                 'X-Shopify-Access-Token': accessToken
             }
         });
-    
+
         orderObj = await orderObj.json();
         orderObj.draft_orders.map(async (item) => {
             let body = _.pick(item, ['id', 'created_at', 'updated_at'])
@@ -24,7 +25,7 @@ exports.fetchAndSaveOrders = async function (shop, accessToken) {
                 else console.log('Order saved successfully', item.id)
             })
         })
-    } catch(err) {
-        console.log('Error in fetchinng/saving orders', err.message);
+    } catch (err) {
+        ctx.body = { status: 'failed', message: err.message };
     }
 }
