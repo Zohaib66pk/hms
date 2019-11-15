@@ -12,7 +12,7 @@ const Index = (props) => {
 
       try {
 
-        let url = 'http://localhost:8081/api/customers'
+        let url = '/api/customers'
         let resp = await fetch(url)
         resp = await resp.json()
 
