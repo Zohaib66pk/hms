@@ -17,15 +17,6 @@ class MyApp extends App {
     const { Component, pageProps } = this.props;
     const shopOrigin = Cookies.get("shopOrigin");
 
-    const myfunc = async () => {
-      let c = await fetch('http://localhost:8081/customers')
-      let cObj = await c.json()
-      console.log('myFunc',cObj)
-    }
-    
-
-    myfunc();
-
     return (
       <Container>
         <AppProvider i18n={translations}>

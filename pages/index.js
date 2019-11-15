@@ -1,43 +1,62 @@
-import { Heading, Page, Card, DataTable } from "@shopify/polaris";
-import Cookies from "js-cookie";
+import React, { useEffect, useState } from 'react';
+import { Page, DataTable } from "@shopify/polaris";
+
 
 const Index = (props) => {
 
+  const [customers, setCustomers] = useState([]);
 
-  const rows = [
-    ['Emerald Silk Gown', '$875.00', 124689, 140, '$122,500.00'],
-    ['Mauve Cashmere Scarf', '$230.00', 124533, 83, '$19,090.00'],
-    [
-      'Navy Merino Wool Blazer with khaki chinos and yellow belt',
-      '$445.00',
-      124518,
-      32,
-      '$14,240.00',
-    ],
-  ];
+  useEffect(() => {
+
+    async function getCsutomers() {
+
+      try {
+
+        let url = 'http://localhost:8081/api/customers'
+        let resp = await fetch(url)
+        resp = await resp.json()
+
+        setCustomers([...resp.data]) //set Customers state
+
+      } catch (err) {
+        console.log('Unable to fetch customers data', err.message)
+      }
+
+    }
+
+    getCsutomers();
+
+  }, [])
+
   return (
 
-    <Page title="Sales by product">
-      <Card>
-        <DataTable
-          columnContentTypes={[
-            'text',
-            'numeric',
-            'numeric',
-            'numeric',
-            'numeric',
-          ]}
-          headings={[
-            'Product',
-            'Price',
-            'SKU Number',
-            'Net quantity',
-            'Net sales',
-          ]}
-          rows={rows}
-          totals={['', '', '', 255, '$155,830.00']}
-        />
-      </Card>
+    (customers.length > 0) && <Page title="Customers Data by RFM">
+
+      <DataTable
+        columnContentTypes={[
+          'text',
+          'text',
+          'text',
+          'text',
+          'text',
+          'Numeric',
+          'text',
+          'Numeric',
+          'Numeric',
+        ]}
+        headings={[
+          'First Name',
+          'Last Name',
+          'Email',
+          'Phone',
+          'Last Order ID',
+          'Orders Count',
+          'Total Spent',
+          'Rating'
+        ]}
+        rows={customers}
+      />
+
     </Page>
   )
 };
