@@ -20,7 +20,7 @@ export const registerWebhooks = async (
   } else {
     console.log(
       "Failed to register webhook",
-      registration.result.data.webhookSubscriptionCreate
+      //registration.result.data.webhookSubscriptionCreate
     );
   }
 };

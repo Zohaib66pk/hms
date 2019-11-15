@@ -8,24 +8,32 @@ import next from "next";
 import Router from "koa-router";
 import session from "koa-session";
 import * as handlers from "./handlers/index";
-import cors from '@koa/cors'
-import mongoose from 'mongoose';
+import cors from "@koa/cors";
+import mongoose from "mongoose";
+import { receiveWebhook } from "@shopify/koa-shopify-webhooks";
 
-const _ = require('lodash'); // to get specific body fields
-mongoose.connect('mongodb://localhost:27017/hms_db', { // Connect Mobgodb locally
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}, function (err) {
-  if (err) console.log('Error connecting mongodb', err.message)
-});
+
+const _ = require("lodash"); // to get specific body fields
+
+mongoose.connect(
+  "mongodb://localhost:27017/hms_db",
+  {
+    // Connect Mobgodb locally
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  },
+  function (err) {
+    if (err) console.log("Error connecting mongodb", err.message);
+  }
+);
 
 // Models
-const customerModel = require('./models/customerModel');
-const orderModel = require('./models/orderModel');
+const customerModel = require("./models/customerModel");
+const orderModel = require("./models/orderModel");
 
 // Controllers
-const customerController = require('./controllers/customerController');
-const orderController = require('./controllers/orderController');
+const customerController = require("./controllers/customerController");
+const orderController = require("./controllers/orderController");
 
 // Environment Setup
 dotenv.config();
@@ -38,11 +46,16 @@ const app = next({
 // Shopify request handler
 const handle = app.getRequestHandler();
 const { SHOPIFY_API_SECRET, SHOPIFY_API_KEY, SCOPES } = process.env;
+
 app.prepare().then(() => {
   const server = new Koa();
   const router = new Router();
+  const webhook = receiveWebhook({
+    secret: SHOPIFY_API_SECRET
+  });
   server.use(session(server));
   server.keys = [SHOPIFY_API_SECRET];
+
 
   // Middleware to check authentication before any request
   server.use(
@@ -55,17 +68,42 @@ app.prepare().then(() => {
         //Auth token and shop available in session
         //Redirect to shop upon auth
         const { shop, accessToken } = ctx.session;
+
+        //Register Webhooks For Ceate Customers and Orders 
+        await handlers.registerWebhooks(
+          shop,
+          accessToken,
+          "ORDERS_CREATE",
+          "/webhooks/orders/create",
+          ApiVersion.October19
+        );
+
+        await handlers.registerWebhooks(
+          shop,
+          accessToken,
+          "CUSTOMERS_CREATE",
+          "/webhooks/customers/create",
+          ApiVersion.October19
+        );
+
         ctx.cookies.set("shopOrigin", shop, {
           httpOnly: false
         });
 
         //Get data from shopify store after authentication and save it to DB
-        customerController.fetchAndSaveCustomers(ctx.session.shop, ctx.session.accessToken)
-        orderController.fetchAndSaveOrders(ctx.session.shop, ctx.session.accessToken)
+        customerController.fetchAndSaveCustomers(
+          ctx.session.shop,
+          ctx.session.accessToken
+        );
+        orderController.fetchAndSaveOrders(
+          ctx.session.shop,
+          ctx.session.accessToken
+        );
         ctx.redirect("/");
       }
     })
   );
+
   server.use(
     graphQLProxy({
       version: ApiVersion.October19
@@ -73,26 +111,31 @@ app.prepare().then(() => {
   );
 
   // To allow cross origin request
-  server.use(cors())
-
+  server.use(cors());
 
   /************* Routes ***************/
 
   // Get All customers data from  MongoDB
-  router.get('/api/customers', customerController.getCustomers);
+  router.get("/api/customers", customerController.getCustomers); //Middleware
 
-  //Middleware 
+  //Recieve Webhook on create customer
+  router.post("/webhooks/customers/create", webhook, ctx => {
+    console.log("received webhook: ", ctx.state.webhook);
+  });
+
+  //Recieve Webhook on create order
+  router.post("/webhooks/orders/create", webhook, ctx => {
+    console.log("received webhook: ", ctx.state.webhook);
+  });
+
   router.get("*", verifyRequest(), async ctx => {
     await handle(ctx.req, ctx.res);
     ctx.respond = false;
     ctx.res.statusCode = 200;
+  }); //Routes setup
 
-  })
-
-  //Routes setup
   server.use(router.allowedMethods());
   server.use(router.routes());
-
   /************* Routes End***************/
 
   server.listen(port, () => {
@@ -100,6 +143,3 @@ app.prepare().then(() => {
   });
 
 });
-
-
-
